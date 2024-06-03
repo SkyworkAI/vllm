@@ -352,3 +352,11 @@ function (define_gpu_extension_target GPU_MOD_NAME)
 
   install(TARGETS ${GPU_MOD_NAME} LIBRARY DESTINATION ${GPU_DESTINATION})
 endfunction()
+
+function(use_ccache_if_enable)
+  find_program(CCACHE_FOUND ccache)
+  if (CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
+  endif (CCACHE_FOUND)
+endfunction()

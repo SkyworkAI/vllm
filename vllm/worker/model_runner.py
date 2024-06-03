@@ -1,12 +1,13 @@
 import time
 import warnings
 from collections import defaultdict
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union, Type
 
 import numpy as np
 import torch
 import torch.nn as nn
 
+from vllm.attention.backends.abstract import AttentionBackend
 from vllm.attention import AttentionMetadata, get_attn_backend
 from vllm.config import (CacheConfig, DeviceConfig, LoadConfig, LoRAConfig,
                          ModelConfig, ParallelConfig, SchedulerConfig,
@@ -113,16 +114,15 @@ class ModelRunner:
         self.graph_block_tables = np.zeros(
             (max(_BATCH_SIZES_TO_CAPTURE), self.get_max_block_per_batch()),
             dtype=np.int32)
-        self.attn_backend = get_attn_backend(
-            self.model_config.get_num_attention_heads(self.parallel_config),
-            self.model_config.get_head_size(),
-            self.model_config.get_num_kv_heads(self.parallel_config),
-            self.model_config.get_sliding_window(),
-            self.model_config.dtype,
-            self.kv_cache_dtype,
-            self.block_size,
-        )
 
+        # Lazy initialization
+        self.attn_backend: Type[AttentionBackend]
+        self.model: nn.Module  # Set after load_model
+        # Set if the backend is flashinfer.
+        self.flashinfer_workspace_buffer: torch.Tensor
+        # Set after load_model.
+        self.lora_manager: Optional[LRUCacheWorkerLoRAManager] = None
+        
         # Create processor for multi-modal data
         if self.vision_language_config is not None:
             self.multi_modal_input_processor = MULTIMODAL_REGISTRY \
@@ -133,14 +133,16 @@ class ModelRunner:
         else:
             self.multi_modal_input_processor = None
 
-        # Lazy initialization
-        self.model: nn.Module  # Set after load_model
-        # Set if the backend is flashinfer.
-        self.flashinfer_workspace_buffer: torch.Tensor
-        # Set after load_model.
-        self.lora_manager: Optional[LRUCacheWorkerLoRAManager] = None
-
     def load_model(self) -> None:
+        self.attn_backend = get_attn_backend(
+            self.model_config.get_num_attention_heads(self.parallel_config),
+            self.model_config.get_head_size(),
+            self.model_config.get_num_kv_heads(self.parallel_config),
+            self.model_config.get_sliding_window(),
+            self.model_config.dtype,
+            self.kv_cache_dtype,
+            self.block_size,
+        )
         with CudaMemoryProfiler() as m:
             self.model = get_model(
                 model_config=self.model_config,

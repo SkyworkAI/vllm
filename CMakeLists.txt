@@ -9,6 +9,9 @@ message(STATUS "Target device: ${VLLM_TARGET_DEVICE}")
 
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/utils.cmake)
 
+# Supported CCACHE
+use_ccache_if_enable()
+
 #
 # Supported python versions.  These versions will be searched in order, the
 # first match will be selected.  These should be kept in sync with setup.py.

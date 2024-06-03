@@ -289,6 +289,15 @@ class DummyModelLoader(BaseModelLoader):
             # NOTE(woosuk): For accurate performance evaluation, we assign
             # random values to the weights.
             initialize_dummy_weights(model)
+
+            for _, module in model.named_modules():
+                quant_method = getattr(module, "quant_method", None)
+                if quant_method is not None:
+                    quant_method.process_weights_after_loading(module)
+                # FIXME: Remove this after Mixtral is updated
+                # to use quant_method.
+                if hasattr(module, "process_weights_after_loading"):
+                    module.process_weights_after_loading()
         return model.eval()
 
 
@@ -605,8 +614,8 @@ class BitsAndBytesModelLoader(BaseModelLoader):
             model_name_or_path: str,
             allowed_patterns: List[str],
             revision: Optional[str] = None) -> Tuple[List[str], str]:
-        """Retrieve weight files. Download the files if necessary. 
-        
+        """Retrieve weight files. Download the files if necessary.
+
         Return the weight files and the file pattern."""
         is_local = os.path.isdir(model_name_or_path)
 
